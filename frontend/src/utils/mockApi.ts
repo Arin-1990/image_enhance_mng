@@ -1,4 +1,4 @@
-import type { ImageHistory } from "../types/ImageHistory";
+import type { ImageHistory } from "../types/Types";
 
 const API_BASE_URL = "http://localhost:3001/api/images";
 
@@ -21,14 +21,14 @@ export const uploadImage = async (file: File): Promise<ImageHistory> => {
 // 画像変換
 export const convertImage = async (
   id: string,
-  imageQuality: number
+  preset: string
 ): Promise<ImageHistory> => {
   const response = await fetch(`${API_BASE_URL}/convert`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ id, imageQuality }),
+    body: JSON.stringify({ id, preset }),
   });
 
   if (!response.ok) {

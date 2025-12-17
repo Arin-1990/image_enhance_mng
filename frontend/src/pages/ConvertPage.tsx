@@ -1,20 +1,8 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import { uploadImage, convertImage } from "../utils/mockApi";
 import { useHistory } from "../context/HistoryContext";
-import type { ImageHistory } from "../types/ImageHistory";
-
 import ImageModal from "../components/ImageModal";
-import { log } from "console";
-
-interface ConvertState {
-  originalFile: File | null;
-  previewUrl: string;
-  converting: boolean;
-  resultUrl: string;
-  modalSrc: string | null;
-  originalImageResolution: string;
-  convertedImageResolution: string;
-}
+import { type ConvertState, type PresetType } from "../types/Types";
 
 const ConvertPage: React.FC = () => {
   const [state, setState] = useState<ConvertState>({
@@ -25,28 +13,25 @@ const ConvertPage: React.FC = () => {
     modalSrc: null,
     originalImageResolution: "",
     convertedImageResolution: "",
+    preset: "portrait_clear",
   });
-  const { addImageToHistory, settings } = useHistory();
+
+  const { addImageToHistory } = useHistory();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageClick = (src: string) => {
-    setState({ ...state, modalSrc: src });
+    setState((prev) => ({ ...prev, modalSrc: src }));
   };
 
   const handleCloseModal = () => {
-    setState({ ...state, modalSrc: null });
+    setState((prev) => ({ ...prev, modalSrc: null }));
   };
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const getImageResolution = (url: string): Promise<string> => {
     return new Promise((resolve) => {
       const img = new Image();
-      img.onload = () => {
-        resolve(`${img.width}x${img.height}`);
-      };
-      img.onerror = () => {
-        resolve("N/A");
-      };
+      img.onload = () => resolve(`${img.width}x${img.height}`);
+      img.onerror = () => resolve("N/A");
       img.src = url;
     });
   };
@@ -55,51 +40,48 @@ const ConvertPage: React.FC = () => {
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
     const file = event.target.files?.[0];
-    if (file) {
-      const url = URL.createObjectURL(file);
-      setState({
-        ...state,
-        originalFile: file,
-        previewUrl: url,
-        resultUrl: "",
-        convertedImageResolution: "", // Reset converted resolution
-      });
-      const resolution = await getImageResolution(url);
-      setState((prevState) => ({
-        ...prevState,
-        originalImageResolution: resolution,
-      }));
-    }
+    if (!file) return;
+
+    const url = URL.createObjectURL(file);
+    setState((prev) => ({
+      ...prev,
+      originalFile: file,
+      previewUrl: url,
+      resultUrl: "",
+      convertedImageResolution: "",
+    }));
+
+    const resolution = await getImageResolution(url);
+    setState((prev) => ({
+      ...prev,
+      originalImageResolution: resolution,
+    }));
   };
 
   const handleConvert = async () => {
-    if (state.originalFile) {
-      setState({ ...state, converting: true });
-      try {
-        const uploadedImage = await uploadImage(state.originalFile);
-        addImageToHistory(uploadedImage);
-        const convertedImage = await convertImage(
-          uploadedImage.id,
-          settings.imageQuality
-        );
-        setState({
-          ...state,
-          resultUrl: convertedImage.enhanced_url,
-          converting: false,
-        });
+    if (!state.originalFile) return;
 
-        // Get resolution of converted image
-        const convertedResolution = await getImageResolution(
-          convertedImage.enhanced_url
-        );
-        setState((prevState) => ({
-          ...prevState,
-          convertedImageResolution: convertedResolution,
-        }));
-      } catch (error) {
-        console.error("Conversion failed:", error);
-        setState({ ...state, converting: false });
-      }
+    setState((prev) => ({ ...prev, converting: true }));
+
+    try {
+      const uploadedImage = await uploadImage(state.originalFile);
+      addImageToHistory(uploadedImage);
+
+      const convertedImage = await convertImage(uploadedImage.id, state.preset);
+
+      const convertedResolution = await getImageResolution(
+        convertedImage.enhanced_url
+      );
+
+      setState((prev) => ({
+        ...prev,
+        resultUrl: convertedImage.enhanced_url,
+        convertedImageResolution: convertedResolution,
+        converting: false,
+      }));
+    } catch (err) {
+      console.error("Conversion failed:", err);
+      setState((prev) => ({ ...prev, converting: false }));
     }
   };
 
@@ -112,6 +94,7 @@ const ConvertPage: React.FC = () => {
       modalSrc: null,
       originalImageResolution: "",
       convertedImageResolution: "",
+      preset: "portrait_clear",
     });
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -121,6 +104,8 @@ const ConvertPage: React.FC = () => {
   return (
     <div>
       <h2>変換ページ</h2>
+
+      {/* 文件选择 */}
       <div style={{ marginBottom: "20px" }}>
         <input
           type="file"
@@ -137,6 +122,31 @@ const ConvertPage: React.FC = () => {
           </button>
         )}
       </div>
+
+      {/* Preset 选择 */}
+      {state.originalFile && (
+        <div style={{ marginBottom: "20px" }}>
+          <label style={{ fontWeight: "bold", marginRight: "10px" }}>
+            変換プリセット：
+          </label>
+          <select
+            value={state.preset}
+            onChange={(e) =>
+              setState((prev) => ({
+                ...prev,
+                preset: e.target.value as PresetType,
+              }))
+            }
+          >
+            <option value="portrait_soft">人像・自然（保守）</option>
+            <option value="portrait_clear">人像・くっきり（おすすめ）</option>
+            <option value="portrait_strong">人像・強調（やや激しい）</option>
+            <option value="screenshot_ui">スクリーンショット / UI</option>
+          </select>
+        </div>
+      )}
+
+      {/* 图片对比 */}
       <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
         {state.previewUrl && (
           <div style={{ textAlign: "center" }}>
@@ -154,9 +164,11 @@ const ConvertPage: React.FC = () => {
             <p>解像度: {state.originalImageResolution}</p>
           </div>
         )}
+
         {state.previewUrl && state.resultUrl && (
           <span style={{ fontSize: "2em" }}>→</span>
         )}
+
         {state.resultUrl && (
           <div style={{ textAlign: "center" }}>
             <h3>変換後の画像</h3>
@@ -174,6 +186,7 @@ const ConvertPage: React.FC = () => {
           </div>
         )}
       </div>
+
       {state.modalSrc && (
         <ImageModal
           src={state.modalSrc}
@@ -181,6 +194,7 @@ const ConvertPage: React.FC = () => {
           onClose={handleCloseModal}
         />
       )}
+
       <button
         onClick={handleConvert}
         disabled={!state.originalFile || state.converting}
