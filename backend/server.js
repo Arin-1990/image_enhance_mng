@@ -4,6 +4,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const sharp = require("sharp");
+const PRESETS = require("./presets");
 
 const PORT = 3001;
 const app = express();
@@ -11,6 +12,9 @@ const app = express();
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
+// ======================
+// 基础设置
+// ======================
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
 
@@ -26,6 +30,9 @@ let imageHistory = [];
 
 app.use("/uploads", express.static(uploadsDir));
 
+// ======================
+// 上传接口
+// ======================
 app.post("/api/images/upload", upload.single("image"), (req, res) => {
   const file = req.file;
   if (!file) return res.status(400).json({ message: "No file uploaded" });
@@ -44,63 +51,63 @@ app.post("/api/images/upload", upload.single("image"), (req, res) => {
   res.json(item);
 });
 
-function applyFormat(instance, format, quality) {
+// ======================
+// 输出格式统一处理
+// ======================
+function applyFormat(instance, format) {
   if (format === "png") return instance.png();
-  if (format === "webp") return instance.webp({ quality });
+  if (format === "webp") return instance.webp({ quality: 92 });
+
   return instance.jpeg({
-    quality,
+    quality: 92,
     chromaSubsampling: "4:4:4",
     progressive: true,
   });
 }
 
+// ======================
+// 转换接口（preset 版）
+// ======================
 app.post("/api/images/convert", async (req, res) => {
-  const { id, imageQuality = 80 } = req.body;
+  const { id, preset = "portrait_clear" } = req.body;
 
   const index = imageHistory.findIndex((i) => i.id === id);
-  if (index === -1) return res.status(404).json({ message: "Not found" });
+  if (index === -1) {
+    return res.status(404).json({ message: "Image not found" });
+  }
 
   const item = imageHistory[index];
   const originalPath = path.join(uploadsDir, item.original_name);
 
+  const config = PRESETS[preset] || PRESETS.portrait_clear;
+
   try {
     const image = sharp(originalPath);
-    const { width, format } = await image.metadata();
+    const metadata = await image.metadata();
+    const { width, format } = metadata;
 
     const baseName = path.parse(item.original_name).name;
     const ext = format === "jpeg" ? ".jpg" : `.${format}`;
-    const enhancedName = `${baseName}-enhanced${ext}`;
+    const enhancedName = `${baseName}-${preset}${ext}`;
     const enhancedPath = path.join(uploadsDir, enhancedName);
 
-    let sharpInstance = image;
+    let instance = image;
 
-    if (imageQuality >= 80) {
-      sharpInstance = sharpInstance
-        .median(1)
-        .resize({
-          width: Math.round(width * 1.6),
-          kernel: sharp.kernel.lanczos3,
-        })
-        .sharpen({
-          sigma: 1.2,
-          m1: 1.0,
-          m2: 2.0,
-          x1: 2,
-          y2: 15,
-        })
-        .modulate({
-          brightness: 1.02,
-          saturation: 1.05,
-        });
+    if (config.median > 0) {
+      instance = instance.median(config.median);
     }
 
-    sharpInstance = applyFormat(
-      sharpInstance,
-      format,
-      Math.min(imageQuality, 95)
-    );
+    instance = instance
+      .resize({
+        width: Math.round(width * config.scale),
+        kernel: sharp.kernel.lanczos3,
+      })
+      .sharpen(config.sharpen)
+      .modulate(config.modulate);
 
-    await sharpInstance.toFile(enhancedPath);
+    instance = applyFormat(instance, format);
+
+    await instance.toFile(enhancedPath);
 
     imageHistory[index] = {
       ...item,
@@ -111,11 +118,23 @@ app.post("/api/images/convert", async (req, res) => {
 
     res.json(imageHistory[index]);
   } catch (err) {
-    console.error(err);
+    console.error("Convert failed:", err);
     res.status(500).json({ message: "Convert failed" });
   }
 });
 
+// ======================
+// 其他接口
+// ======================
 app.get("/api/images", (_, res) => res.json(imageHistory));
 
-app.listen(PORT, () => console.log(`Server running http://localhost:${PORT}`));
+app.get("/api/images/:id", (req, res) => {
+  const image = imageHistory.find((img) => img.id === req.params.id);
+  if (!image) return res.status(404).json({ message: "Image not found" });
+  res.json(image);
+});
+
+// ======================
+app.listen(PORT, () => {
+  console.log(`Server running http://localhost:${PORT}`);
+});

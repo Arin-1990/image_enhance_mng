@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import type { ImageHistory } from "../types/ImageHistory";
+import type { ImageHistory } from "../types/Types";
 import { useHistory } from "../context/HistoryContext";
 import Table, { type Column } from "../components/Table";
 import { useNavigate } from "react-router-dom";

@@ -4,7 +4,6 @@ import ConvertPage from "./pages/ConvertPage";
 import HistoryPage from "./pages/HistoryPage";
 import HistoryDetailPage from "./pages/HistoryDetailPage";
 import GuidePage from "./pages/GuidePage";
-import SettingsPage from "./pages/SettingsPage";
 
 function App() {
   return (
@@ -14,7 +13,6 @@ function App() {
         <Route path="/history" element={<HistoryPage />} />
         <Route path="/history/:id" element={<HistoryDetailPage />} />
         <Route path="/guide" element={<GuidePage />} />
-        <Route path="/settings" element={<SettingsPage />} />
       </Route>
     </Routes>
   );

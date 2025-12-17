@@ -4,34 +4,19 @@ import {
   useContext,
   type PropsWithChildren,
 } from "react";
-import type { ImageHistory } from "../types/ImageHistory";
+import type { ImageHistory } from "../types/Types";
 import { fetchImages } from "../utils/mockApi";
 
 interface HistoryContextType {
   historyList: ImageHistory[];
   fetchHistory: () => Promise<void>;
   addImageToHistory: (image: ImageHistory) => void;
-  settings: {
-    defaultConvertMode: string;
-    autoSave: boolean;
-    imageQuality: number;
-  };
-  updateSettings: (newSettings: {
-    defaultConvertMode?: string;
-    autoSave?: boolean;
-    imageQuality?: number;
-  }) => void;
 }
 
 const HistoryContext = createContext<HistoryContextType | undefined>(undefined);
 
 export const HistoryProvider = ({ children }: PropsWithChildren) => {
   const [historyList, setHistoryList] = useState<ImageHistory[]>([]);
-  const [settings, setSettings] = useState({
-    defaultConvertMode: "standard",
-    autoSave: true,
-    imageQuality: 80,
-  });
 
   const fetchHistory = async () => {
     const data = await fetchImages();
@@ -42,22 +27,12 @@ export const HistoryProvider = ({ children }: PropsWithChildren) => {
     setHistoryList((prevList) => [...prevList, image]);
   };
 
-  const updateSettings = (newSettings: {
-    defaultConvertMode?: string;
-    autoSave?: boolean;
-    imageQuality?: number;
-  }) => {
-    setSettings((prev) => ({ ...prev, ...newSettings }));
-  };
-
   return (
     <HistoryContext.Provider
       value={{
         historyList,
         fetchHistory,
         addImageToHistory,
-        settings,
-        updateSettings,
       }}
     >
       {children}
